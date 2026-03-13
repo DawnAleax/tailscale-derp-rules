@@ -1,57 +1,32 @@
-name: Update Tailscale DERP Rules
+name: Update DERP Rules
 
 on:
   schedule:
-    - cron: "0 0 * * *"   # 每天 UTC 00:00 自动运行
-  workflow_dispatch:       # 允许手动触发
+    - cron: '0 0 * * *'  # 每天更新一次
+  workflow_dispatch:
 
 jobs:
   update-derp:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.x"
-
-      - name: Install dependencies
+      - name: Generate DERP rules
         run: |
-          python -m pip install --upgrade pip
-          pip install requests pyyaml
-
-      - name: Fetch DERP map and update rules
-        run: |
-          python - <<'EOF'
-          import requests, yaml, os
-          url = "https://login.tailscale.com/derpmap/default"
-          r = requests.get(url)
-          derp = r.json()["Regions"]
-          rules = {"rules": []}
-          for region in derp.values():
-              for node in region["Nodes"]:
-                  rules["rules"].append({
-                      "type": "domain-suffix",
-                      "value": node["HostName"],
-                      "outbound": "DIRECT"
-                  })
-          os.makedirs("ruleset", exist_ok=True)
-          with open("ruleset/tailscale_derp.yaml", "w") as f:
-              yaml.dump(rules, f)
-          EOF
+          mkdir -p ruleset
+          curl -s https://login.tailscale.com/derpmap/default \
+            | jq '.Regions' > ruleset/tailscale_derp.yaml
 
       - name: Commit changes
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "actions@github.com"
-          git add .
+          git config user.name "DawnAleax"
+          git config user.email "wang15188217911@gmail.com"
+          git add ruleset/tailscale_derp.yaml
           git diff --cached --quiet || git commit -m "Update DERP rules"
 
-      - name: Push changes using PAT
+      - name: Push changes
         env:
           PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
-          git push https://x-access-token:${PAT_TOKEN}@github.com/${{ github.repository }} HEAD:main
+          git push https://x-access-token:${PAT_TOKEN}@github.com/DawnAleax/tailscale-derp-rules.git HEAD:main
