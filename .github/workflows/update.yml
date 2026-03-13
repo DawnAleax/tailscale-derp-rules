@@ -2,33 +2,56 @@ name: Update Tailscale DERP Rules
 
 on:
   schedule:
-    - cron: "0 3 * * *" # UTC 时间每天 03:00 自动更新
-  workflow_dispatch:     # 手动触发也行
+    - cron: "0 0 * * *"   # 每天 UTC 00:00 自动运行
+  workflow_dispatch:       # 允许手动触发
 
 jobs:
   update-derp:
     runs-on: ubuntu-latest
 
     steps:
-      # 拉取代码，使用 fork 仓库自带 GITHUB_TOKEN
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          python-version: "3.x"
 
-      # 安装 jq（生成脚本用）
-      - name: Install jq
-        run: sudo apt-get update && sudo apt-get install -y jq
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests pyyaml
 
-      # 生成 DERP 规则
-      - name: Generate DERP rules
-        run: bash scripts/gen_derp_rules.sh
+      - name: Fetch DERP map and update rules
+        run: |
+          python - <<'EOF'
+          import requests, yaml, os
+          url = "https://login.tailscale.com/derpmap/default"
+          r = requests.get(url)
+          derp = r.json()["Regions"]
+          rules = {"rules": []}
+          for region in derp.values():
+              for node in region["Nodes"]:
+                  rules["rules"].append({
+                      "type": "domain-suffix",
+                      "value": node["HostName"],
+                      "outbound": "DIRECT"
+                  })
+          os.makedirs("ruleset", exist_ok=True)
+          with open("ruleset/tailscale_derp.yaml", "w") as f:
+              yaml.dump(rules, f)
+          EOF
 
-      # 提交并推送
-      - name: Commit and Push
+      - name: Commit changes
         run: |
           git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add ruleset/tailscale_derp.yaml
-          git commit -m "update derp rules" || echo "no changes"
-          git push origin HEAD:main
+          git config user.email "actions@github.com"
+          git add .
+          git diff --cached --quiet || git commit -m "Update DERP rules"
+
+      - name: Push changes using PAT
+        env:
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          git push https://x-access-token:${PAT_TOKEN}@github.com/${{ github.repository }} HEAD:main
