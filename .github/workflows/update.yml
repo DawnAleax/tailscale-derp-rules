@@ -5,6 +5,11 @@ on:
     - cron: '0 0 * * *' # 每天北京时间上午 8 点运行
   workflow_dispatch:      # 允许手动触发
 
+# --- 添加以下代码 ---
+permissions:
+  contents: write
+# ------------------
+
 jobs:
   build:
     runs-on: ubuntu-latest
