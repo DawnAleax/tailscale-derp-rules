@@ -2,33 +2,33 @@ name: Update Tailscale DERP Rules
 
 on:
   schedule:
-    - cron: "0 3 * * *"   # 每天 UTC 03:00 自动更新
-  workflow_dispatch:       # 手动触发也行
+    - cron: "0 3 * * *" # UTC 时间每天 03:00 自动更新
+  workflow_dispatch:     # 手动触发也行
 
 jobs:
   update-derp:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ 拉取仓库代码，使用 GITHUB_TOKEN 自动授权
+      # 拉取代码，使用 fork 仓库自带 GITHUB_TOKEN
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      # 2️⃣ 安装 jq 用于解析 JSON（可选，看你的生成脚本是否用到）
+      # 安装 jq（生成脚本用）
       - name: Install jq
         run: sudo apt-get update && sudo apt-get install -y jq
 
-      # 3️⃣ 生成 DERP 规则
+      # 生成 DERP 规则
       - name: Generate DERP rules
-        run: bash scripts/gen_derp_rules.sh  # 你的生成脚本
+        run: bash scripts/gen_derp_rules.sh
 
-      # 4️⃣ 提交并推送
+      # 提交并推送
       - name: Commit and Push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add .
+          git add ruleset/tailscale_derp.yaml
           git commit -m "update derp rules" || echo "no changes"
-          git push origin HEAD:main   # ⚡ 直接用 origin，不用写 HTTPS URL
+          git push origin HEAD:main
