@@ -2,7 +2,7 @@ name: Update Tailscale DERP Rules
 
 on:
   schedule:
-    - cron: "0 3 * * *"
+    - cron: "0 3 * * *"   # 每天 03:00 UTC
   workflow_dispatch:
 
 jobs:
@@ -10,18 +10,23 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}  # ✅ 使用内置 token
 
       - name: Install jq
         run: sudo apt-get install -y jq
 
-      - name: Generate rules
+      - name: Generate DERP rules
         run: bash scripts/gen_derp_rules.sh
 
-      - name: Commit changes
+      - name: Commit and Push
         run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
           git add .
           git commit -m "update derp rules" || echo "no change"
-          git push origin HEAD:main
+          git push
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
