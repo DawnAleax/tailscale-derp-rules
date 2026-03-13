@@ -18,10 +18,10 @@ jobs:
       - name: Generate rules
         run: bash scripts/gen_derp_rules.sh
 
-      - name: Commit
+      - name: Commit changes
         run: |
-          git config --global user.name github-actions
-          git config --global user.email actions@github.com
           git add .
           git commit -m "update derp rules" || echo "no change"
-          git push
+          git push origin HEAD:main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
