@@ -1,0 +1,12 @@
+# Auto-generated DERP rules
+# Do not edit manually, updated by GitHub Actions
+- derp1.tailscale.com
+- derp1-all.tailscale.com
+- derp1c.tailscale.com
+- derp1d.tailscale.com
+- derp1f.tailscale.com
+- derp2.tailscale.com
+- derp2-all.tailscale.com
+- derp2d.tailscale.com
+- derp2e.tailscale.com
+# ... 其他 DERP 节点
