@@ -220,6 +220,9 @@ payload:
 - DOMAIN,derp4i.tailscale.com
 - IP-CIDR,185.40.234.53/32
 - IP-CIDR6,2a00:dd80:20::8a6/128
+- DOMAIN,derp4j.tailscale.com
+- IP-CIDR,185.40.234.176/32
+- IP-CIDR6,2a00:dd80:20::e67/128
 - DOMAIN,derp5e.tailscale.com
 - IP-CIDR,172.105.179.230/32
 - IP-CIDR6,2400:8907::2000:ceff:fe8d:4f4e/128
