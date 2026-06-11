@@ -2,7 +2,7 @@ name: Update Tailscale DERP Rules
 
 on:
   schedule:
-    - cron: '0 0 * * *'
+    - cron: "0 0 * * *"
   workflow_dispatch:
 
 permissions:
@@ -13,81 +13,29 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 2
 
-      - name: Set up Python
+      - name: Setup Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.x'
+          python-version: "3.x"
 
-      - name: Install dependencies
+      - name: Install deps
         run: pip install requests PyYAML
 
-      - name: Run script
+      - name: Generate DERP rules
         run: python update_derp.py
 
-      # =========================
-      # 获取旧版本
-      # =========================
-      - name: Get previous version
+      - name: Load previous file
         run: |
-          git show HEAD~1:tailscale_derp.yaml > old.yaml || echo "{}" > old.yaml
+          git show HEAD~1:tailscale_derp.yaml > old.yaml || echo "payload: []" > old.yaml
 
-      # =========================
-      # 生成 changelog
-      # =========================
       - name: Generate changelog
-        run: |
-          python3 << 'EOF'
-import yaml
+        run: python .github/scripts/gen_changelog.py
 
-def load(p):
-    try:
-        return yaml.safe_load(open(p)) or {}
-    except:
-        return {}
-
-old = load("old.yaml")
-new = load("tailscale_derp.yaml")
-
-def extract(d):
-    s = set()
-    for r in d.get("Regions", {}).values():
-        for n in r.get("Nodes", []):
-            s.add((n["HostName"], n.get("IPv4"), n.get("IPv6")))
-    return s
-
-old_nodes = extract(old)
-new_nodes = extract(new)
-
-added = sorted(new_nodes - old_nodes)
-removed = sorted(old_nodes - new_nodes)
-
-def fmt(items):
-    if not items:
-        return "- None"
-    return "\n".join([f"- {a} | {b} | {c}" for a,b,c in items])
-
-with open("CHANGELOG.md", "w") as f:
-    f.write("# DERP Update Changelog\n\n")
-
-    f.write("## ➕ Added Nodes\n")
-    f.write(fmt(added))
-    f.write("\n\n")
-
-    f.write("## ➖ Removed Nodes\n")
-    f.write(fmt(removed))
-    f.write("\n")
-
-print("changelog generated")
-EOF
-
-      # =========================
-      # commit
-      # =========================
       - name: Commit changes
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
@@ -95,47 +43,22 @@ EOF
 
           git add tailscale_derp.yaml CHANGELOG.md
 
-          git commit -m "Update DERP rules" || exit 0
+          git commit -m "update DERP rules" || exit 0
           git push || true
 
-      # =========================
-      # 计算 hash
-      # =========================
-      - name: Compute hash
+      - name: Create hash
         id: hash
         run: |
-          HASH=$(sha256sum tailscale_derp.yaml | cut -c1-12)
-          echo "hash=$HASH" >> $GITHUB_OUTPUT
+          echo "hash=$(sha256sum tailscale_derp.yaml | cut -c1-12)" >> $GITHUB_OUTPUT
 
-      # =========================
-      # 检查 tag
-      # =========================
-      - name: Check tag
-        id: tagcheck
-        run: |
-          git fetch --tags
-          if git rev-parse "v${{ steps.hash.outputs.hash }}" >/dev/null 2>&1; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-          fi
-
-      # =========================
-      # create tag
-      # =========================
       - name: Create tag
-        if: steps.tagcheck.outputs.exists == 'false'
         run: |
-          git tag v${{ steps.hash.outputs.hash }}
-          git push origin v${{ steps.hash.outputs.hash }}
+          git tag v${{ steps.hash.outputs.hash }} || true
+          git push origin v${{ steps.hash.outputs.hash }} || true
 
-      # =========================
-      # release
-      # =========================
-      - name: Create Release
-        if: steps.tagcheck.outputs.exists == 'false'
+      - name: Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.hash.outputs.hash }}
-          name: DERP Update ${{ steps.hash.outputs.hash }}
+          name: DERP ${{ steps.hash.outputs.hash }}
           body_path: CHANGELOG.md
