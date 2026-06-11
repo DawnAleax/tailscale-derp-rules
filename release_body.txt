@@ -1,7 +1,7 @@
 DERP Update
 
 ## Summary
-- Added: 88
-- Removed: 0
+- Added: 0
+- Removed: 88
 - IP Changed: 0
-- Total: 88
+- Total: 0

@@ -1,12 +1,15 @@
 # DERP Update
 
 ## Summary
-- Added: 88
-- Removed: 0
+- Added: 0
+- Removed: 88
 - IP Changed: 0
-- Total nodes: 88
+- Total nodes: 0
 
 ## Added
+- None
+
+## Removed
 - derp10b.tailscale.com | 192.73.240.161 | 2607:f740:14::61c
 - derp10c.tailscale.com | 192.73.240.121 | 2607:f740:14::40c
 - derp10d.tailscale.com | 192.73.240.132 | 2607:f740:14::500
@@ -95,9 +98,6 @@
 - derp9d.tailscale.com | 209.177.156.94 | 2607:f740:100::c05
 - derp9e.tailscale.com | 192.73.248.83 | 2607:f740:100::359
 - derp9f.tailscale.com | 209.177.156.197 | 2607:f740:100::cad
-
-## Removed
-- None
 
 ## IP Changed
 - None
