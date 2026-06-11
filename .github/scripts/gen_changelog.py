@@ -2,82 +2,68 @@ import yaml
 
 def load(p):
     try:
-        with open(p, "r", encoding="utf-8") as f:
-            return yaml.safe_load(f) or {}
+        return yaml.safe_load(open(p)) or {}
     except:
         return {}
 
 old = load("old.yaml")
 new = load("tailscale_derp.yaml")
 
-def extract(d):
+def index(d):
     m = {}
     for r in d.get("Regions", {}).values():
         for n in r.get("Nodes", []):
-            m[n["HostName"]] = {
-                "ipv4": n.get("IPv4"),
-                "ipv6": n.get("IPv6")
-            }
+            host = n.get("HostName")
+            if host:
+                m[host] = n
     return m
 
-old_map = extract(old)
-new_map = extract(new)
+old_map = index(old)
+new_map = index(new)
 
-added = []
-removed = []
-updated = []
+old_set = set(old_map)
+new_set = set(new_map)
 
-for k in new_map:
-    if k not in old_map:
-        added.append((k, new_map[k]["ipv4"], new_map[k]["ipv6"]))
-    else:
-        if new_map[k] != old_map[k]:
-            updated.append((k, old_map[k], new_map[k]))
+added = new_set - old_set
+removed = old_set - new_set
 
-for k in old_map:
-    if k not in new_map:
-        removed.append((k, old_map[k]["ipv4"], old_map[k]["ipv6"]))
+changed = []
+for h in old_set & new_set:
+    if (old_map[h].get("IPv4"), old_map[h].get("IPv6")) != \
+       (new_map[h].get("IPv4"), new_map[h].get("IPv6")):
+        changed.append(h)
 
-def fmt_added(items):
-    return "\n".join([f"- {a} | {b} | {c}" for a,b,c in items]) or "- None"
-
-def fmt_removed(items):
-    return "\n".join([f"- {a} | {b} | {c}" for a,b,c in items]) or "- None"
-
-def fmt_updated(items):
-    if not items:
+def fmt(keys, m):
+    if not keys:
         return "- None"
-    out = []
-    for host, oldv, newv in items:
-        out.append(
-            f"- {host} | {oldv['ipv4']}→{newv['ipv4']} | {oldv['ipv6']}→{newv['ipv6']}"
-        )
-    return "\n".join(out)
+    return "\n".join(
+        f"- {k} | {m[k].get('IPv4')} | {m[k].get('IPv6')}"
+        for k in sorted(keys)
+    )
 
 summary = {
     "added": len(added),
     "removed": len(removed),
-    "updated": len(updated),
-    "total": len(new_map)
+    "changed": len(changed),
+    "total": len(new_set),
 }
 
-with open("CHANGELOG.md", "w", encoding="utf-8") as f:
-    f.write("# DERP Change Log\n\n")
-
-    f.write("## 📊 Summary\n")
+with open("CHANGELOG.md", "w") as f:
+    f.write("# DERP Update\n\n")
+    f.write("## Summary\n")
     f.write(f"- Added: {summary['added']}\n")
     f.write(f"- Removed: {summary['removed']}\n")
-    f.write(f"- Updated: {summary['updated']}\n")
-    f.write(f"- Total nodes: {summary['total']}\n\n")
+    f.write(f"- IP Changed: {summary['changed']}\n")
+    f.write(f"- Total: {summary['total']}\n\n")
 
-    f.write("## ➕ Added\n")
-    f.write(fmt_added(added))
-    f.write("\n\n")
+    f.write("## Added\n" + fmt(added, new_map) + "\n\n")
+    f.write("## Removed\n" + fmt(removed, old_map) + "\n\n")
+    f.write("## IP Changed\n" + fmt(changed, new_map) + "\n")
 
-    f.write("## ➖ Removed\n")
-    f.write(fmt_removed(removed))
-    f.write("\n\n")
-
-    f.write("## 🔁 Updated (IP changed)\n")
-    f.write(fmt_updated(updated))
-    f.write("\n")
+with open("release_body.txt", "w") as f:
+    f.write("DERP Update\n\n")
+    f.write("## Summary\n")
+    f.write(f"- Added: {summary['added']}\n")
+    f.write(f"- Removed: {summary['removed']}\n")
+    f.write(f"- IP Changed: {summary['changed']}\n")
+    f.write(f"- Total: {summary['total']}\n")
