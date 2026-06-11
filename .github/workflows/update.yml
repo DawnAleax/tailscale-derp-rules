@@ -29,110 +29,13 @@ jobs:
       - name: Run generator
         run: python update_derp.py
 
-      # =========================
-      # 获取旧版本
-      # =========================
       - name: Load previous file
         run: |
           git show HEAD~1:tailscale_derp.yaml > old.yaml || echo "Regions: {}" > old.yaml
 
-      # =========================
-      # 生成 CHANGELOG + RELEASE META
-      # =========================
       - name: Generate changelog
-        run: |
-          python3 << 'EOF'
-import yaml
+        run: python .github/scripts/gen_changelog.py
 
-def load(p):
-    try:
-        return yaml.safe_load(open(p)) or {}
-    except:
-        return {}
-
-old = load("old.yaml")
-new = load("tailscale_derp.yaml")
-
-# =========================
-# KEY: 只用 HostName 做主键（避免 IP 变化误判）
-# =========================
-def index_by_host(d):
-    m = {}
-    for r in d.get("Regions", {}).values():
-        for n in r.get("Nodes", []):
-            host = n.get("HostName")
-            if host:
-                m[host] = n
-    return m
-
-old_map = index_by_host(old)
-new_map = index_by_host(new)
-
-old_hosts = set(old_map.keys())
-new_hosts = set(new_map.keys())
-
-added_hosts = new_hosts - old_hosts
-removed_hosts = old_hosts - new_hosts
-common_hosts = old_hosts & new_hosts
-
-# IP变化（仅记录，不算新增/删除）
-changed_hosts = []
-for h in common_hosts:
-    o = old_map[h]
-    n = new_map[h]
-    if (o.get("IPv4"), o.get("IPv6")) != (n.get("IPv4"), n.get("IPv6")):
-        changed_hosts.append(h)
-
-def fmt(hosts, m):
-    lines = []
-    for h in sorted(hosts):
-        n = m[h]
-        lines.append(f"- {h} | {n.get('IPv4')} | {n.get('IPv6')}")
-    return "\n".join(lines) if lines else "- None"
-
-added_block = fmt(added_hosts, new_map)
-removed_block = fmt(removed_hosts, old_map)
-changed_block = fmt(changed_hosts, new_map)
-
-summary = {
-    "added": len(added_hosts),
-    "removed": len(removed_hosts),
-    "changed": len(changed_hosts),
-    "total": len(new_hosts),
-}
-
-with open("CHANGELOG.md", "w") as f:
-    f.write("# DERP Update\n\n")
-    f.write("## Summary\n")
-    f.write(f"- Added: {summary['added']}\n")
-    f.write(f"- Removed: {summary['removed']}\n")
-    f.write(f"- Changed (IP only): {summary['changed']}\n")
-    f.write(f"- Total nodes: {summary['total']}\n\n")
-
-    f.write("## ➕ Added\n")
-    f.write(added_block + "\n\n")
-
-    f.write("## ➖ Removed\n")
-    f.write(removed_block + "\n\n")
-
-    f.write("## 🔁 IP Changed\n")
-    f.write(changed_block + "\n")
-
-# release meta
-with open("release_body.txt", "w") as f:
-    f.write("DERP Update\n\n")
-    f.write("## Summary\n")
-    f.write(f"- Added: {summary['added']}\n")
-    f.write(f"- Removed: {summary['removed']}\n")
-    f.write(f"- IP Changed: {summary['changed']}\n")
-    f.write(f"- Total: {summary['total']}\n")
-
-print("done")
-EOF
-
-      # =========================
-      # commit
-      # =========================
       - name: Commit changes
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
@@ -142,9 +45,6 @@ EOF
           git commit -m "update DERP rules" || exit 0
           git push || true
 
-      # =========================
-      # hash
-      # =========================
       - name: Compute hash
         id: hash
         run: |
@@ -153,9 +53,6 @@ EOF
           echo "hash=$HASH" >> $GITHUB_OUTPUT
           echo "date=$DATE" >> $GITHUB_OUTPUT
 
-      # =========================
-      # tag check
-      # =========================
       - name: Check tag
         id: tagcheck
         run: |
@@ -170,18 +67,12 @@ EOF
 
           echo "tag=$TAG" >> $GITHUB_OUTPUT
 
-      # =========================
-      # create tag
-      # =========================
       - name: Create tag
         if: steps.tagcheck.outputs.exists == 'false'
         run: |
           git tag ${{ steps.tagcheck.outputs.tag }}
           git push origin ${{ steps.tagcheck.outputs.tag }}
 
-      # =========================
-      # release
-      # =========================
       - name: Create Release
         if: steps.tagcheck.outputs.exists == 'false'
         uses: softprops/action-gh-release@v2
