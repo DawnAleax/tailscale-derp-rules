@@ -1,7 +1,7 @@
 # Tailscale DERP 自动直连规则集
 
-Update Status: https://github.com/DawnAleax/tailscale-derp-rules/actions/workflows/update.yml/badge.svg  
-License: https://img.shields.io/github/license/DawnAleax/tailscale-derp-rules  
+![Update Status](https://github.com/DawnAleax/tailscale-derp-rules/actions/workflows/update.yml/badge.svg)
+![License](https://img.shields.io/github/license/DawnAleax/tailscale-derp-rules)
 
 ------------------------------------------------------------
 
