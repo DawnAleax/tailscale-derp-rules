@@ -13,70 +13,68 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0
 
-      - name: Set up Python
+      - name: Setup Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.x'
+          python-version: "3.x"
 
-      - name: Install dependencies
+      - name: Install deps
         run: pip install requests PyYAML
 
-      - name: Run generator
+      - name: Generate DERP file
         run: python update_derp.py
 
-      - name: Load previous file
+      - name: Load previous version
         run: |
           git show HEAD~1:tailscale_derp.yaml > old.yaml || echo "Regions: {}" > old.yaml
 
       - name: Generate changelog
-        run: python .github/scripts/gen_changelog.py
+        run: python scripts/gen_changelog.py
 
-      - name: Commit changes
+      # =========================
+      # commit
+      # =========================
+      - name: Commit
         run: |
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
 
           git add tailscale_derp.yaml CHANGELOG.md release_body.txt
+
           git commit -m "update DERP rules" || exit 0
           git push || true
 
-      - name: Compute hash
-        id: hash
+      # =========================
+      # tag
+      # =========================
+      - name: Compute tag
+        id: tag
         run: |
           HASH=$(sha256sum tailscale_derp.yaml | cut -c1-12)
           DATE=$(date +%Y%m%d)
-          echo "hash=$HASH" >> $GITHUB_OUTPUT
-          echo "date=$DATE" >> $GITHUB_OUTPUT
-
-      - name: Check tag
-        id: tagcheck
-        run: |
-          TAG="derp-${{ steps.hash.outputs.date }}-${{ steps.hash.outputs.hash }}"
-          git fetch --tags
-
-          if git rev-parse "$TAG" >/dev/null 2>&1; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-          fi
-
+          TAG="derp-${DATE}-${HASH}"
           echo "tag=$TAG" >> $GITHUB_OUTPUT
 
       - name: Create tag
-        if: steps.tagcheck.outputs.exists == 'false'
         run: |
-          git tag ${{ steps.tagcheck.outputs.tag }}
-          git push origin ${{ steps.tagcheck.outputs.tag }}
+          git tag ${{ steps.tag.outputs.tag }} || true
+          git push origin ${{ steps.tag.outputs.tag }} || true
 
+      # =========================
+      # release
+      # =========================
       - name: Create Release
-        if: steps.tagcheck.outputs.exists == 'false'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.tagcheck.outputs.tag }}
-          name: DERP Update ${{ steps.tagcheck.outputs.tag }}
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: DERP Update ${{ steps.tag.outputs.tag }}
           body_path: release_body.txt
+          files: |
+            tailscale_derp.yaml
+            CHANGELOG.md
+            release_body.txt
