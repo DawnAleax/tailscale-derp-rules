@@ -8,35 +8,46 @@ def fetch():
     r.raise_for_status()
     return r.json()
 
-def normalize(data):
+def build_payload(data):
+    payload = []
+
     regions = data.get("Regions", {})
-    out = {"Regions": {}}
 
-    for rid, region in regions.items():
-        nodes = []
-        for n in region.get("Nodes", []):
-            nodes.append({
-                "HostName": n.get("HostName"),
-                "IPv4": n.get("IPv4"),
-                "IPv6": n.get("IPv6"),
-            })
+    for _, region in regions.items():
+        nodes = region.get("Nodes", [])
 
-        out["Regions"][rid] = {
-            "RegionID": region.get("RegionID"),
-            "RegionCode": region.get("RegionCode"),
-            "Nodes": nodes
-        }
+        for n in nodes:
+            host = n.get("HostName")
 
-    return out
+            # DOMAIN
+            if host:
+                payload.append(f"DOMAIN,{host}")
+
+            # IPv4
+            ipv4 = n.get("IPv4")
+            if ipv4:
+                payload.append(f"IP-CIDR,{ipv4}/32")
+
+            # IPv6
+            ipv6 = n.get("IPv6")
+            if ipv6:
+                payload.append(f"IP-CIDR6,{ipv6}/128")
+
+    return payload
 
 def main():
     data = fetch()
-    out = normalize(data)
+
+    payload = build_payload(data)
+
+    out = {
+        "payload": payload
+    }
 
     with open("tailscale_derp.yaml", "w") as f:
         yaml.safe_dump(out, f, sort_keys=False, allow_unicode=True)
 
-    print("rules:", sum(len(r["Nodes"]) for r in out["Regions"].values()))
+    print("rules:", len(payload))
 
 if __name__ == "__main__":
     main()
