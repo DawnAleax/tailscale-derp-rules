@@ -1,7 +1,16 @@
-# DERP Change Log
+# DERP Update
 
-## ➕ Added
+## Summary
+- Added: 0
+- Removed: 0
+- IP Changed: 0
+- Total: 0
+
+## Added
 - None
 
-## ➖ Removed
+## Removed
+- None
+
+## IP Changed
 - None
