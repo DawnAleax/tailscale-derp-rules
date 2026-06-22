@@ -2,72 +2,149 @@ import yaml
 
 def load(p):
     try:
-        return yaml.safe_load(open(p)) or {}
+        with open(p, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f) or {}
     except:
         return {}
 
 old = load("old.yaml")
 new = load("tailscale_derp.yaml")
 
-def index(d):
-    m = {}
-    for r in d.get("Regions", {}).values():
-        for n in r.get("Nodes", []):
-            h = n.get("HostName")
-            if h:
-                m[h] = n
-    return m
 
-old_m = index(old)
-new_m = index(new)
+# ----------------------------
+# 规则标准化：把 DERP 转成 set
+# ----------------------------
+def normalize_rules(data):
+    """
+    输出格式：
+    {
+        ("DOMAIN", "xxx.com", None),
+        ("IP-CIDR", "1.1.1.1/32", None),
+        ("IP-CIDR6", "xxxx", None)
+    }
+    """
+    s = set()
 
-old_h = set(old_m)
-new_h = set(new_m)
+    payload = data.get("payload", [])
+    if not isinstance(payload, list):
+        return s
 
-added = new_h - old_h
-removed = old_h - new_h
-common = old_h & new_h
+    for r in payload:
+        if not isinstance(r, str):
+            continue
 
+        parts = r.split(",")
+
+        if len(parts) == 2:
+            t, v = parts
+            s.add((t.strip(), v.strip(), None))
+
+        elif len(parts) == 3:
+            t, v1, v2 = parts
+            s.add((t.strip(), v1.strip(), v2.strip()))
+
+    return s
+
+
+old_s = normalize_rules(old)
+new_s = normalize_rules(new)
+
+
+# ----------------------------
+# diff 计算
+# ----------------------------
+added = new_s - old_s
+removed = old_s - new_s
+common = old_s & new_s
+
+
+# ----------------------------
+# 变化检测（规则内容变化）
+# ----------------------------
 changed = []
-for h in common:
-    o = old_m[h]
-    n = new_m[h]
-    if (o.get("IPv4"), o.get("IPv6")) != (n.get("IPv4"), n.get("IPv6")):
-        changed.append(h)
+for rule in common:
+    if rule not in new_s:
+        changed.append(rule)
 
-def fmt(hosts, m):
-    if not hosts:
-        return "- None"
-    return "\n".join(
-        f"- {h} | {m[h].get('IPv4')} | {m[h].get('IPv6')}"
-        for h in sorted(hosts)
-    )
 
-summary = {
-    "added": len(added),
-    "removed": len(removed),
-    "changed": len(changed),
-    "total": len(new_h),
-}
+# ----------------------------
+# 分类统计
+# ----------------------------
+def classify(rules):
+    d = {"DOMAIN": 0, "IP-CIDR": 0, "IP-CIDR6": 0}
+    for t, _, _ in rules:
+        if t in d:
+            d[t] += 1
+    return d
 
-with open("CHANGELOG.md", "w") as f:
-    f.write("# DERP Update\n\n")
+
+added_stat = classify(added)
+removed_stat = classify(removed)
+changed_stat = classify(changed)
+
+
+# ----------------------------
+# 输出格式化
+# ----------------------------
+def fmt(title, rules):
+    if not rules:
+        return f"## {title}\n- None\n"
+
+    lines = [f"## {title}"]
+    for t, v1, v2 in sorted(rules):
+        if v2:
+            lines.append(f"- {t} {v1} -> {v2}")
+        else:
+            lines.append(f"- {t} {v1}")
+    return "\n".join(lines) + "\n"
+
+
+total = len(new_s)
+net = len(added) - len(removed)
+
+
+# ----------------------------
+# CHANGELOG.md
+# ----------------------------
+with open("CHANGELOG.md", "w", encoding="utf-8") as f:
+    f.write("# DERP Update Report\n\n")
+
     f.write("## Summary\n")
-    f.write(f"- Added: {summary['added']}\n")
-    f.write(f"- Removed: {summary['removed']}\n")
-    f.write(f"- IP Changed: {summary['changed']}\n")
-    f.write(f"- Total nodes: {summary['total']}\n\n")
+    f.write(f"- Added: {len(added)} (DOMAIN {added_stat['DOMAIN']}, IP {added_stat['IP-CIDR']}, IPv6 {added_stat['IP-CIDR6']})\n")
+    f.write(f"- Removed: {len(removed)} (DOMAIN {removed_stat['DOMAIN']}, IP {removed_stat['IP-CIDR']}, IPv6 {removed_stat['IP-CIDR6']})\n")
+    f.write(f"- Changed: {len(changed)}\n")
+    f.write(f"- Total rules: {total}\n")
+    f.write(f"- Net change: {net:+d}\n\n")
 
-    f.write("## Added\n" + fmt(added, new_m) + "\n\n")
-    f.write("## Removed\n" + fmt(removed, old_m) + "\n\n")
-    f.write("## IP Changed\n" + fmt(changed, new_m) + "\n")
+    f.write(fmt("Added", added))
+    f.write("\n")
+    f.write(fmt("Removed", removed))
+    f.write("\n")
+    f.write(fmt("Changed", changed))
 
-with open("release_body.txt", "w") as f:
+
+# ----------------------------
+# release_body.txt（GitHub Release用）
+# ----------------------------
+with open("release_body.txt", "w", encoding="utf-8") as f:
     f.write("DERP Update\n\n")
+
     f.write("## Summary\n")
-    f.write(f"- Added: {summary['added']}\n")
-    f.write(f"- Removed: {summary['removed']}\n")
-    f.write(f"- IP Changed: {summary['changed']}\n")
-    f.write(f"- Total: {summary['total']}\n")
+    f.write(f"- Added: {len(added)}\n")
+    f.write(f"- Removed: {len(removed)}\n")
+    f.write(f"- Changed: {len(changed)}\n")
+    f.write(f"- Total rules: {total}\n")
+    f.write(f"- Net change: {net:+d}\n\n")
+
+    if len(added) or len(removed) or len(changed):
+        f.write("## Detail\n\n")
+        f.write(fmt("Added", added))
+        f.write("\n")
+        f.write(fmt("Removed", removed))
+        f.write("\n")
+        f.write(fmt("Changed", changed))
+    else:
+        f.write("No changes detected.\n")
+
 
 print("done")
