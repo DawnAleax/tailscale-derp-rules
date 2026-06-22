@@ -29,14 +29,28 @@ jobs:
       - name: Generate DERP
         run: python update_derp.py
 
-      - name: Load previous file
+      - name: Detect changes
+        id: changes
         run: |
-          git show HEAD~1:tailscale_derp.yaml > old.yaml || echo "Regions: {}" > old.yaml
+          if git diff --quiet -- tailscale_derp.yaml; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No changes detected."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "Changes detected."
+          fi
+
+      - name: Load previous file
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          git show HEAD~1:tailscale_derp.yaml > old.yaml || echo "payload: []" > old.yaml
 
       - name: Generate changelog
+        if: steps.changes.outputs.changed == 'true'
         run: python generate_changelog.py
 
       - name: Commit changes
+        if: steps.changes.outputs.changed == 'true'
         run: |
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
@@ -44,23 +58,27 @@ jobs:
           git add tailscale_derp.yaml CHANGELOG.md release_body.txt
 
           git commit -m "update DERP rules" || exit 0
-          git push || true
+          git push
 
       - name: Compute tag
+        if: steps.changes.outputs.changed == 'true'
         id: tag
         run: |
           HASH=$(sha256sum tailscale_derp.yaml | cut -c1-12)
           DATE=$(date +%Y%m%d)
+
           TAG="derp-${DATE}-${HASH}"
 
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
       - name: Create tag
+        if: steps.changes.outputs.changed == 'true'
         run: |
           git tag "${{ steps.tag.outputs.tag }}" || true
           git push origin "${{ steps.tag.outputs.tag }}" || true
 
       - name: Create Release
+        if: steps.changes.outputs.changed == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.tag.outputs.tag }}
