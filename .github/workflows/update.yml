@@ -29,22 +29,6 @@ jobs:
       - name: Generate DERP
         run: python update_derp.py
 
-      # --- [新增] 编译 MRS 文件的步骤，放在生成 yaml 之后 ---
-      - name: Compile to MRS format using Mihomo
-        run: |
-          # 获取 Mihomo 最新正式版版本号
-          VERSION=$(curl -s "https://api.github.com/repos/MetaCubeX/mihomo/releases/latest" | jq -r .tag_name)
-          echo "Downloading Mihomo version: $VERSION"
-          
-          # 下载最新的 Mihomo amd64 内核
-          wget -qO mihomo.gz "https://github.com/MetaCubeX/mihomo/releases/download/$VERSION/mihomo-linux-amd64-$VERSION.gz"
-          gunzip mihomo.gz
-          chmod +x mihomo
-          
-          # 调用内核将 yaml 转换为 mrs
-          ./mihomo convert-ruleset classical yaml tailscale_derp.yaml tailscale_derp.mrs
-      # --------------------------------------------------------
-
       - name: Load previous file
         run: |
           git show HEAD~1:tailscale_derp.yaml > old.yaml || echo "Regions: {}" > old.yaml
@@ -57,11 +41,9 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
 
-          # [修改] 增加了 tailscale_derp.mrs
-          git add tailscale_derp.yaml tailscale_derp.mrs CHANGELOG.md release_body.txt
+          git add tailscale_derp.yaml CHANGELOG.md release_body.txt
 
-          # [修改] 更新了 commit message
-          git commit -m "update DERP rules and compile MRS" || exit 0
+          git commit -m "update DERP rules" || exit 0
           git push || true
 
       - name: Compute tag
@@ -70,12 +52,13 @@ jobs:
           HASH=$(sha256sum tailscale_derp.yaml | cut -c1-12)
           DATE=$(date +%Y%m%d)
           TAG="derp-${DATE}-${HASH}"
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
       - name: Create tag
         run: |
-          git tag ${{ steps.tag.outputs.tag }} || true
-          git push origin ${{ steps.tag.outputs.tag }} || true
+          git tag "${{ steps.tag.outputs.tag }}" || true
+          git push origin "${{ steps.tag.outputs.tag }}" || true
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -85,6 +68,5 @@ jobs:
           body_path: release_body.txt
           files: |
             tailscale_derp.yaml
-            tailscale_derp.mrs   # [新增] 将编译好的 .mrs 也作为 Release 的附件发布
             CHANGELOG.md
             release_body.txt
